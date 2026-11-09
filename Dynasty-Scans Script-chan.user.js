@@ -2,11 +2,11 @@
 // @name         Dynasty-Scans Script-chan
 // @name:jp      「ディナスティースキャンズ」- 「ユーザースクリプトちゃん」
 // @namespace    dynasty-scans.com/scriptchan
-// @website      https://github.com/gwennie-chan/Dynasty-Scans-Script-chan
+// @website      https://github.com/Dramorian/Dynasty-Scans-Script-chan
 // @supportURL   https://dynasty-scans.com/forum/topics/7297-dynasty-reader-userscripts
-// @version      0.1
-// @downloadURL  https://github.com/gwennie-chan/Dynasty-Scans-Script-chan/raw/master/Dynasty-Scans%20Script-chan.user.js
-// @updateURL    https://github.com/gwennie-chan/Dynasty-Scans-Script-chan/raw/master/Dynasty-Scans%20Script-chan.user.js
+// @version      0.2.0
+// @downloadURL  https://github.com/Dramorian/Dynasty-Scans-Script-chan/raw/master/Dynasty-Scans%20Script-chan.user.js
+// @updateURL    https://github.com/Dramorian/Dynasty-Scans-Script-chan/raw/master/Dynasty-Scans%20Script-chan.user.js
 // @description  Implements various userscripts for Dynasty-Scans.com into one neat package!
 // @author       Dynasty-Scans Scripters
 // @include      https://dynasty-scans.com/*
@@ -1073,20 +1073,19 @@ function rethingify(set) {
 function mangadex(set) {
     if (cURL.match(/(chapters\/)(?!added).*/) || cURL.match(/(series\/.*)/) || cURL.match(/(issues\/.*)/) || cURL.match(/(anthologies\/.*)/)) {
         if (set === true) {
-            let title, authors, select;
+            let title, authors;
             title = getWorkInfo("title");
             //console.log(title);
             authors = getWorkInfo("author");
             //console.log(authors);
 
-            if(cURL.match(/(chapters\/)(?!added).*/)) {
-                select = '#chapter-title';
-            }
-            else {
-                select = '.tag-title';
-            }
+            // Titles now live in the page's main heading (h1/h2/h3 strong);
+            // attach the tool right under it instead of the removed
+            // #chapter-title/.tag-title elements.
+            const $target = $('h1, h2, h3').has('strong').first();
+            if ($target.length === 0) { return; }
 
-            $(`<div id="mangadex-tool" style="display: none"><h2>Mangadex Search Tool:</h2><a id="mangadex-title" target="_blank" href="https://mangadex.org/search?title=${title}">Title</a></div>`).appendTo(select);
+            $(`<div id="mangadex-tool" style="display: none"><h2>Mangadex Search Tool:</h2><a id="mangadex-title" target="_blank" href="https://mangadex.org/search?title=${encodeURIComponent(title || '')}">Title</a></div>`).insertAfter($target);
 
             if(Array.isArray(authors)) {
                 for (let i = 0; i < authors.length; i++) {
@@ -1106,64 +1105,28 @@ function mangadex(set) {
 }
 
 function getWorkInfo(what) {
-    function getAuthors(discrim = null) {
-        let selector;
-        let tempArray = [];
-        if (discrim === 'chapters') {
-            selector = $('#chapter-title > a');
-        }
-        else {
-            selector = $('.tag-title > a');
-        }
-        if(selector.length === 1) {
-            return selector.text();
-        }
-        else if (selector.length > 1) {
-            selector.each(function(){
-                tempArray.push($(this).text());
-            });
-            return tempArray;
-        }
-        else {
-            return null;
-        }
+    function getAuthors() {
+        // Work pages link authors as /authors/<slug> (e.g. /authors/mitsumoto_hiyori).
+        const links = $('a[href^="/authors/"]');
+        if (links.length === 0) { return null; }
+        const names = links.map(function () { return $(this).text(); }).get();
+        return names.length === 1 ? names[0] : names;
     }
 
-    function getTitle(discrim = null) {
-        if (discrim === 'chapters'){
-            if(!document.querySelector('#chapter-title b a')) {
-                return $('#chapter-title b').text();
-            }
-            else {
-                return $('#chapter-title b a').text();
-            }
-        }
-        else {
-            if(!document.querySelector('.tag-title b a')) {
-                return $('.tag-title b').text();
-            }
-            else {
-                return $('.tag-title b a').text();
-            }
-        }
+    function getTitle() {
+        // Work titles now live in the page's main heading (h1/h2/h3 strong).
+        const $heading = $('h1, h2, h3').has('strong').first();
+        if ($heading.length === 0) { return null; }
+        // Prefer the strong text (the title), dropping any " by <author>" tail.
+        const $strong = $heading.find('strong');
+        let text = $strong.length ? $strong.text() : $heading.text();
+        text = text.replace(/\s+by\s+.*$/i, '').trim();
+        return text || null;
     }
 
-    if (cURL.match(/chapters/)) {
-        if(what === "title") {return getTitle('chapters');}
-        if(what === "author") {return getAuthors('chapters');}
-    }
-    else if (cURL.match(/series/)) {
-        if(what === "title") {return getTitle();}
-        if(what === "author") {return getAuthors();}
-    }
-    else if (cURL.match(/issues/)) {
-        if(what === "title") {return getTitle();}
-        if(what === "author") {return getTItle();}
-    }
-    else if (cURL.match(/anthologies/)) {
-        if(what === "title") {return getTitle();}
-        if(what === "author") {return getAuthors();}
-    }
+    if (what === "title") { return getTitle(); }
+    if (what === "author") { return getAuthors(); }
+    return null;
 }
 
 
@@ -1171,7 +1134,12 @@ function getWorkInfo(what) {
 function createTagMap() {
     return $.getJSON(tagsJSON).then((data) => {
         const tagMap = {};
-        Object.values(data).forEach((tagBin) => tagBin.forEach((nameLink) => tagMap[nameLink.name.toLowerCase()] = nameLink));
+        // dynasty-scans.com now wraps the per-letter tag bins in a top-level
+        // "tags" array alongside pagination metadata (current_page, total_pages).
+        // Read data.tags when present; fall back to Object.values(data) for the
+        // older flat {letter: [tags]} shape so the tagger survives site revisions.
+        const tagBins = data.tags ? Object.values(data.tags) : Object.values(data);
+        tagBins.forEach((tagBin) => tagBin.forEach((nameLink) => tagMap[nameLink.name.toLowerCase()] = nameLink));
         return tagMap;
     });
 }

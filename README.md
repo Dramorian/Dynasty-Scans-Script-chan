@@ -34,7 +34,12 @@ Original scripts created by [Alice Cheshire](https://github.com/Alice-Cheshire),
 
 ## Changelog :new:
 
-(We'll Need This Eventually)
+### 0.2.0 — Site sync (2026-11-09)
+- Fix Forum Tagger: `tags.json` now wraps tag bins in a top-level `tags` array with pagination metadata; `createTagMap()` reads `data.tags` (with fallback to the old flat shape).
+- Retarget MangaDex Searcher at the rebuilt chapter/issue/anthology pages: titles now live in the main heading (`h1/h2/h3 strong`) instead of the removed `#chapter-title`/`.tag-title` elements; also fixed a latent typo (`getTItle()`) in the issues branch.
+- Refresh script metadata: bump `@version` to 0.2.0 (Tampermonkey auto-update) and point `@website`/`@downloadURL`/`@updateURL` at the current repo (Dramorian/Dynasty-Scans-Script-chan).
+
+(We'll need to fill the rest of this eventually.)
 
 ## Features :toolbox:
 Script-chan implements and bundles together features associated with minor scripts. These features are grouped into four major types of tweaks: Browsing, Forum, Gallery, and Miscelleanous. (Tweaks are also grouped as such on the script UI.)
